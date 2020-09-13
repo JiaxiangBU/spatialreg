@@ -1,6 +1,6 @@
 
 
-lmSLX <- function(formula, data = list(), listw, na.action, weights=NULL, Durbin=TRUE, zero.policy=NULL) {
+lmSLX <- function(formula, data = list(), listw, na.action, weights=NULL, Durbin=TRUE, zero.policy=NULL, drop = NULL) {
         if (is.null(zero.policy))
             zero.policy <- get("zeroPolicy", envir = .spatialregOptions)
         stopifnot(is.logical(zero.policy))
@@ -22,7 +22,7 @@ lmSLX <- function(formula, data = list(), listw, na.action, weights=NULL, Durbin
 	    subset <- !(1:length(listw$neighbours) %in% na.act)
 	    listw <- subset(listw, subset, zero.policy=zero.policy)
 	}
-        
+
 	y <- model.response(mf, "numeric")
 	if (any(is.na(y))) stop("NAs in dependent variable")
 	x <- model.matrix(mt, mf)
@@ -33,7 +33,7 @@ lmSLX <- function(formula, data = list(), listw, na.action, weights=NULL, Durbin
         nclt <- colnames(x)
 
         weights <- as.vector(model.extract(mf, "weights"))
-        if (!is.null(weights) && !is.numeric(weights)) 
+        if (!is.null(weights) && !is.numeric(weights))
             stop("'weights' must be a numeric vector")
         if (is.null(weights)) weights <- rep(as.numeric(1), n)
         if (any(is.na(weights))) stop("NAs in weights")
@@ -44,10 +44,10 @@ lmSLX <- function(formula, data = list(), listw, na.action, weights=NULL, Durbin
             WX <- create_WX(x, listw, zero.policy=zero.policy,
                prefix=prefix)
         } else if (is.formula(Durbin)) {
-	    dmf <- lm(Durbin, data, na.action=na.action, 
+	    dmf <- lm(Durbin, data, na.action=na.action,
 	         method="model.frame")
             fx <- try(model.matrix(Durbin, dmf), silent=TRUE)
-            if (class(fx) == "try-error") 
+            if (class(fx) == "try-error")
                  stop("Durbin variable mis-match")
             WX <- create_WX(fx, listw, zero.policy=zero.policy,
                 prefix=prefix)
@@ -79,10 +79,20 @@ lmSLX <- function(formula, data = list(), listw, na.action, weights=NULL, Durbin
 #        x <- cbind(x, WX)
 # 180128 Mark L. Burkey summary.lm error for SLX object
         colnames(x) <- make.names(colnames(x))
+
+        selected_column_list <- colnames(x)
+        drop_column_list <-
+          selected_columns_list %>%
+          stringr::str_subset("lag") %>%
+          stringr::srr_subset(stingr::str_flatten(drop_column_list,'|'))
+        selected_column_list <-
+          selected_column_list %>%
+          setdiff(drop_column_list)
+
         if (attr(mt, "intercept") == 1L) {
-            lm.model <- lm(formula(paste("y ~ ", paste(colnames(x)[-1], collapse="+"))), data=as.data.frame(x), weights=weights)
+            lm.model <- lm(formula(paste("y ~ ", paste(selected_column_list[-1], collapse="+"))), data=as.data.frame(x), weights=weights)
         } else {
-            lm.model <- lm(formula(paste("y ~ 0 + ", paste(colnames(x), collapse="+"))), data=as.data.frame(x), weights=weights)
+            lm.model <- lm(formula(paste("y ~ 0 + ", paste(selected_column_list, collapse="+"))), data=as.data.frame(x), weights=weights)
         }
         sum_lm_model <- summary.lm(lm.model, correlation = FALSE)
         mixedImps <- NULL
@@ -121,7 +131,7 @@ lmSLX <- function(formula, data = list(), listw, na.action, weights=NULL, Durbin
                 rownames(indirImps) <- rownames(cm)
             }
             totImps <- as.matrix(estimable(lm.model, cm)[, 1:2, drop=FALSE])
-          } 
+          }
       } else if (is.formula(Durbin)) {
 #FIXME
             m <- sum(dvars)
@@ -169,7 +179,7 @@ lmSLX <- function(formula, data = list(), listw, na.action, weights=NULL, Durbin
         } else stop("undefined Durbin state")
         mixedImps <- list(dirImps=dirImps, indirImps=indirImps,
             totImps=totImps)
-        
+
         attr(lm.model, "mixedImps") <- mixedImps
         attr(lm.model, "dvars") <- dvars
         class(lm.model) <- c("SLX", class(lm.model))
@@ -275,7 +285,7 @@ summary.WXImpact <- function(object, ...,
     object$mat <- lagImpactMat(object$impacts)
     object$semat <- lagImpactMat(object$se)
     if (adjust_k) {
-        object$semat <- sqrt((object$semat^2) * ((attr(object, "n") - 
+        object$semat <- sqrt((object$semat^2) * ((attr(object, "n") -
             attr(object, "k"))/attr(object, "n")))
         attr(object, "method") <- paste(attr(object, "method"),
             ", n", sep="")
@@ -310,19 +320,19 @@ create_WX <- function(x, listw, zero.policy=NULL, prefix="") {
         # unnormalized weight matrices
                	if (!(listw$style == "W")) {
  			intercept <- as.double(rep(1, n))
-       	       		wxI <- lag.listw(listw, intercept, 
+       	       		wxI <- lag.listw(listw, intercept,
 				zero.policy = zero.policy)
                         Wvars <- paste(prefix, ".(Intercept)", sep="")
-               	} 
-        }   
+               	}
+        }
 	if (m > 1 || (m == 1 && K == 1)) {
                 WX <- matrix(as.numeric(NA), nrow=n,
                     ncol=ifelse(m==1, 1, (m-(K-1))))
 		for (k in K:m) {
                         j <- ifelse(k==1, 1, k-(K-1))
-			WX[,j] <- lag.listw(listw, x[,xcolnames[k]], 
+			WX[,j] <- lag.listw(listw, x[,xcolnames[k]],
 			    zero.policy=zero.policy)
-			if (any(is.na(WX[,j]))) 
+			if (any(is.na(WX[,j])))
 			    stop("NAs in lagged independent variable")
                         Wvars <- c(Wvars, paste(prefix, ".",
                             xcolnames[k], sep=""))
