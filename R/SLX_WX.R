@@ -84,7 +84,7 @@ lmSLX <- function(formula, data = list(), listw, na.action, weights=NULL, Durbin
         drop_column_list <-
           selected_column_list %>%
           stringr::str_subset("lag") %>%
-          stringr::srr_subset(stingr::str_flatten(drop_column_list,'|'))
+          stringr::srr_subset(stingr::str_flatten(drop,'|'))
         selected_column_list <-
           selected_column_list %>%
           setdiff(drop_column_list)
